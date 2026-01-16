@@ -15,7 +15,7 @@ function NavItem({ href, label }: { href: string; label: string }) {
       className={[
         "block rounded-xl px-3 py-2 text-sm font-medium",
         active
-          ? "bg-orange-50 text-sun ring-1 ring-orange-100"
+          ? "bg-orange-400 text-sun ring-1 ring-orange-100"
           : "text-gray-700 hover:bg-gray-50",
       ].join(" ")}
     >
@@ -29,18 +29,35 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [email, setEmail] = useState<string>("");
 
   useEffect(() => {
-    // garante sessão (se não estiver logado, manda pro login)
-    supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) router.replace("/login");
-      else setEmail(data.session.user.email ?? "");
-    });
+  let mounted = true;
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
-      if (!session) router.replace("/login");
-    });
+  async function check() {
+    // getUser() valida no servidor; getSession() pode ser só cache local
+    const { data, error } = await supabase.auth.getUser();
 
-    return () => sub.subscription.unsubscribe();
-  }, [router]);
+    if (!mounted) return;
+
+    if (error || !data?.user) {
+      await supabase.auth.signOut();
+      router.replace("/login");
+      return;
+    }
+
+    setEmail(data.user.email ?? "");
+  }
+
+  check();
+
+  const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+    if (!session) router.replace("/login");
+  });
+
+  return () => {
+    mounted = false;
+    sub.subscription.unsubscribe();
+  };
+}, [router]);
+
 
   async function logout() {
     await supabase.auth.signOut();

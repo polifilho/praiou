@@ -136,12 +136,10 @@ export default function ItemsPage() {
       <section className="rounded-2xl border border-gray-100 bg-white p-4 space-y-4">
         <h2 className="font-semibold text-gray-900 text-sm">Adicionar novo item</h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
           {/* Tipo */}
           <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700">
-              Tipo do item
-            </label>
+            <label className="text-sm font-medium text-gray-700">Tipo do item</label>
             <select
               className="w-full rounded-xl border border-gray-200 bg-white p-3 text-gray-900"
               value={newName}
@@ -162,9 +160,7 @@ export default function ItemsPage() {
 
           {/* Preço */}
           <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700">
-              Preço (R$)
-            </label>
+            <label className="text-sm font-medium text-gray-700">Preço (R$)</label>
             <input
               type="number"
               min={0}
@@ -174,41 +170,40 @@ export default function ItemsPage() {
             />
           </div>
 
-          {/* Estoque */}
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700">
-              Estoque total
-            </label>
-            <input
-              type="number"
-              min={0}
-              disabled={!newTrack}
-              className="w-full rounded-xl border border-gray-200 p-3 text-gray-900 disabled:bg-gray-50"
-              value={newStock}
-              onChange={(e) => setNewStock(Number(e.target.value))}
-            />
+          {/* Estoque + checkbox embaixo */}
+          <div className="space-y-2">
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-gray-700">Estoque total</label>
+              <input
+                type="number"
+                min={0}
+                disabled={!newTrack}
+                className="w-full rounded-xl border border-gray-200 p-3 text-gray-900 disabled:bg-gray-50"
+                value={newStock}
+                onChange={(e) => setNewStock(Number(e.target.value))}
+              />
+            </div>
           </div>
 
-          {/* Track */}
-          <div className="flex items-end">
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input
-                type="checkbox"
-                checked={newTrack}
-                onChange={(e) => setNewTrack(e.target.checked)}
-              />
-              Controlar estoque
-            </label>
+          {/* Botão na mesma linha */}
+          <div>
+            <button
+              onClick={createItem}
+              disabled={!canCreate}
+              className="w-full rounded-xl bg-sun px-5 py-3 text-white font-semibold disabled:opacity-50 bg-orange-400"
+            >
+              Adicionar item
+            </button>
           </div>
         </div>
-
-        <button
-          onClick={createItem}
-          disabled={!canCreate}
-          className="rounded-xl bg-sun px-5 py-2 text-white font-semibold disabled:opacity-50"
-        >
-          Adicionar item
-        </button>
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            checked={newTrack}
+            onChange={(e) => setNewTrack(e.target.checked)}
+          />
+          Controlar estoque (Se estiver selecionado, será limitado o número de produtos.)
+        </label>
       </section>
 
       {/* LISTA */}
@@ -234,7 +229,7 @@ export default function ItemsPage() {
             <div className="col-span-2">
               <input
                 type="number"
-                className="w-full rounded-xl border border-gray-200 p-2"
+                className="w-full text-gray-600 rounded-xl border border-gray-200 p-2"
                 value={it.price}
                 onBlur={(e) =>
                   updateItem(it.id, { price: Number(e.target.value) })
@@ -253,7 +248,7 @@ export default function ItemsPage() {
               <input
                 type="number"
                 disabled={!it.track_stock}
-                className="w-full rounded-xl border border-gray-200 p-2 disabled:bg-gray-50"
+                className="w-full text-gray-600 rounded-xl border border-gray-200 p-2 disabled:bg-gray-50"
                 value={it.stock_total ?? 0}
                 onBlur={(e) =>
                   updateItem(it.id, { stock_total: Number(e.target.value) })
@@ -274,7 +269,7 @@ export default function ItemsPage() {
               <input
                 type="number"
                 disabled={!it.track_stock}
-                className="w-full rounded-xl border border-gray-200 p-2 disabled:bg-gray-50"
+                className="w-full text-gray-600 rounded-xl border border-gray-200 p-2 disabled:bg-gray-50"
                 value={it.stock_available ?? 0}
                 onBlur={(e) =>
                   updateItem(it.id, {
@@ -309,7 +304,7 @@ export default function ItemsPage() {
             <div className="col-span-2 text-right">
               <button
                 onClick={() => removeItem(it.id)}
-                className="rounded-xl bg-gray-100 px-3 py-2 text-sm hover:bg-gray-200"
+                className="rounded-xl bg-red-400 px-3 py-2 text-sm text-white hover:bg-gray-200"
               >
                 Remover
               </button>
