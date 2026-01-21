@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
-import { useLocalSearchParams, router } from "expo-router";
+import { useLocalSearchParams, Stack, router } from "expo-router";
 import { supabase } from "../../lib/supabase";
 
 type Beach = { id: string; name: string };
@@ -32,6 +32,19 @@ export default function Praias() {
 
   return (
     <View style={{ flex: 1, padding: 24 }}>
+      <Pressable
+        onPress={() => router.back()}
+        style={{ marginBottom: 12 }}
+      >
+        <Text style={{ color: "#fb923c", fontSize: 16, fontWeight: "700" }}>← Voltar</Text>
+      </Pressable>
+
+      <Stack.Screen
+        options={{
+          title: `Praias`,
+          headerLeft: () => null,
+        }}
+      />
       <Text style={{ fontSize: 22, fontWeight: "600", marginBottom: 16 }}>
         Praias — {String(regionName ?? "")}
       </Text>

@@ -62,8 +62,8 @@ export default function Barracas() {
           key={v.id}
           onPress={() =>
             router.push({
-              pathname: "/(flow)/itens",
-              params: { vendorId: v.id, vendorName: v.name },
+              pathname: "/(flow)/vendor",
+              params: { vendorId: v.id },
             })
           }
           style={{
