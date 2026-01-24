@@ -1,11 +1,11 @@
 import { Drawer } from "expo-router/drawer";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Alert, Pressable, Text, View, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
-import { router } from "expo-router";
+import { router, Redirect, usePathname } from "expo-router";
 import type { DrawerNavigationOptions } from "@react-navigation/drawer";
 import { useEffect, useState } from "react";
-import { ActivityIndicator } from "react-native";
+import type { Session } from "@supabase/supabase-js";
 
 function DrawerMenuItem({
   label,
@@ -31,7 +31,7 @@ function DrawerMenuItem({
 }
 
 function CustomDrawerContent(props: any) {
-  const navigation = props.useNavigation;
+  const navigation = props.navigation;
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -115,30 +115,22 @@ function CustomDrawerContent(props: any) {
 }
 
 export default function RootLayout() {
+  const pathname = usePathname();
+
   const [booting, setBooting] = useState(true);
+  const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
-    async function init() {
-      const { data } = await supabase.auth.getSession();
+    supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
-
-      // sem sessão -> login
-      if (!data.session) {
-        router.replace("/login");
-      }
-
+      setSession(data.session ?? null);
       setBooting(false);
-    }
+    });
 
-    init();
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      // sempre que perder sessão -> login
-      if (!session) {
-        router.replace("/login");
-      }
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
     });
 
     return () => {
@@ -155,16 +147,19 @@ export default function RootLayout() {
     );
   }
 
+  // ✅ evita loop: não redireciona se já estiver em login/signup
+  const isAuthRoute = pathname === "/login" || pathname === "/signup";
+  if (!session && !isAuthRoute) {
+    return <Redirect href="/login" />;
+  }
+
   return (
     <Drawer
       drawerContent={(props) => <CustomDrawerContent {...props} />}
       screenOptions={({ route }): DrawerNavigationOptions => ({
         headerStyle: { backgroundColor: "#fb923c" },
         headerTintColor: "#fff",
-        // Drawer header não deve aparecer no flow (Stack vai cuidar)
         headerShown: !route.name.startsWith("(flow)/"),
-
-        // ✅ ALTERAÇÃO: bloqueia swipe do drawer em login/signup
         swipeEnabled: !(route.name === "login" || route.name === "signup"),
       })}
       initialRouteName="index"
@@ -179,9 +174,7 @@ export default function RootLayout() {
         name="login"
         options={{
           drawerItemStyle: { display: "none" },
-          // ✅ ALTERAÇÃO: sem header (remove hamburger)
           headerShown: false,
-          // ✅ ALTERAÇÃO: garante sem swipe nesta tela
           swipeEnabled: false,
         }}
       />
