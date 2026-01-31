@@ -15,7 +15,8 @@ type Reservation = {
   arrival_time: string | null;
   created_at: string;
   confirmation_code?: string | null;
-  vendors?: { name: string | null }[] | null; // join
+  vendor_id: string | null;
+  vendor_name?: string | null; // ✅ preenchido no front
 };
 
 type TabKey = "atuais" | "antigas";
@@ -28,23 +29,17 @@ function statusLabel(s: string) {
   return s;
 }
 
-// cores do badge
 function statusColors(s: string) {
-  // rejeitado
-  if (s === "CANCELED") return { bg: "#fee2e2", text: "#991b1b", border: "#fecaca" }; // red-100 / red-800 / red-200
-  // aguardando
-  if (s === "PENDING") return { bg: "#fef3c7", text: "#92400e", border: "#fde68a" }; // amber-100 / amber-800 / amber-200
-  // aprovado
-  if (s === "CONFIRMED") return { bg: "#dcfce7", text: "#166534", border: "#bbf7d0" }; // green-100 / green-800 / green-200
-  // concluído (verde um pouco diferente)
-  if (s === "ARRIVED") return { bg: "#dbeafe", text: "#1e40af", border: "#bfdbfe" }; // blue
+  if (s === "CANCELED") return { bg: "#fee2e2", text: "#991b1b", border: "#fecaca" };
+  if (s === "PENDING") return { bg: "#fef3c7", text: "#92400e", border: "#fde68a" };
+  if (s === "CONFIRMED") return { bg: "#dcfce7", text: "#166534", border: "#bbf7d0" };
+  if (s === "ARRIVED") return { bg: "#dbeafe", text: "#1e40af", border: "#bfdbfe" };
   return { bg: "#f3f4f6", text: "#111827", border: "#e5e7eb" };
 }
 
 function formatNoSeconds(iso: string | null) {
   if (!iso) return "--";
   const d = new Date(iso);
-  // pt-BR sem segundos
   return d.toLocaleString("pt-BR", {
     day: "2-digit",
     month: "2-digit",
@@ -83,10 +78,9 @@ export default function Reservas() {
 
     const cutoffIso = new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString();
 
-    // ✅ join com vendors para pegar nome
     const q = supabase
       .from("reservations")
-      .select("id,status,arrival_time,created_at,confirmation_code,vendors(name)")
+      .select("id,status,arrival_time,created_at,confirmation_code,vendor_id")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
@@ -95,15 +89,45 @@ export default function Reservas() {
         ? await q.or(`arrival_time.gte.${cutoffIso},arrival_time.is.null`)
         : await q.not("arrival_time", "is", null).lt("arrival_time", cutoffIso);
 
-    setLoading(false);
-
     if (error) {
       setItems([]);
       setErr(error.message);
+      setLoading(false);
       return;
     }
 
-    setItems((data as Reservation[]) ?? []);
+    const reservations = (data ?? []) as Reservation[];
+
+    // ✅ busca nomes das barracas por vendor_id (2ª query)
+    const vendorIds = Array.from(
+      new Set(reservations.map((r) => r.vendor_id).filter(Boolean))
+    ) as string[];
+
+    let vendorMap = new Map<string, string>();
+
+    if (vendorIds.length > 0) {
+      const { data: vData, error: vErr } = await supabase
+        .from("vendors")
+        .select("id,name")
+        .in("id", vendorIds);
+
+      if (vErr) {
+        // se der RLS aqui, você vai ver a mensagem
+        setErr(vErr.message);
+      } else {
+        (vData ?? []).forEach((v: any) => {
+          vendorMap.set(v.id, v.name);
+        });
+      }
+    }
+
+    const merged = reservations.map((r) => ({
+      ...r,
+      vendor_name: r.vendor_id ? vendorMap.get(r.vendor_id) ?? null : null,
+    }));
+
+    setItems(merged);
+    setLoading(false);
   }
 
   async function onRefresh() {
@@ -141,8 +165,16 @@ export default function Reservas() {
           marginBottom: 12,
         }}
       >
-        <TabButton active={tab === "atuais"} label="Atuais" onPress={() => setTab("atuais")} />
-        <TabButton active={tab === "antigas"} label="Antigas" onPress={() => setTab("antigas")} />
+        <TabButton
+          active={tab === "atuais"}
+          label="Atuais"
+          onPress={() => setTab("atuais")}
+        />
+        <TabButton
+          active={tab === "antigas"}
+          label="Antigas"
+          onPress={() => setTab("antigas")}
+        />
       </View>
 
       {err ? (
@@ -165,14 +197,30 @@ export default function Reservas() {
 
       <ScrollView
         contentContainerStyle={{ paddingBottom: 24 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         {!items.length ? (
           <View style={{ paddingTop: 60 }}>
-            <Text style={{ textAlign: "center", color: "#6b7280", fontWeight: "700" }}>
-              {tab === "atuais" ? "Nenhuma reserva atual." : "Nenhuma reserva antiga."}
+            <Text
+              style={{
+                textAlign: "center",
+                color: "#6b7280",
+                fontWeight: "700",
+              }}
+            >
+              {tab === "atuais"
+                ? "Nenhuma reserva atual."
+                : "Nenhuma reserva antiga."}
             </Text>
-            <Text style={{ textAlign: "center", color: "#9ca3af", marginTop: 6 }}>
+            <Text
+              style={{
+                textAlign: "center",
+                color: "#9ca3af",
+                marginTop: 6,
+              }}
+            >
               Quando você fizer uma reserva, ela aparecerá aqui.
             </Text>
           </View>
@@ -180,7 +228,7 @@ export default function Reservas() {
           <View style={{ gap: 10 }}>
             {items.map((r) => {
               const c = statusColors(r.status);
-              const vendorName = r.vendors?.[0]?.name ?? "--";
+              const vendorName = r.vendor_name ?? "--";
 
               return (
                 <View
@@ -194,8 +242,20 @@ export default function Reservas() {
                   }}
                 >
                   {/* topo: nome da barraca + badge */}
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                    <Text style={{ fontWeight: "900", fontSize: 16, flexShrink: 1 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontWeight: "900",
+                        fontSize: 16,
+                        flexShrink: 1,
+                      }}
+                    >
                       {vendorName}
                     </Text>
 
@@ -209,7 +269,13 @@ export default function Reservas() {
                         borderRadius: 999,
                       }}
                     >
-                      <Text style={{ color: c.text, fontWeight: "900", fontSize: 12 }}>
+                      <Text
+                        style={{
+                          color: c.text,
+                          fontWeight: "900",
+                          fontSize: 12,
+                        }}
+                      >
                         {statusLabel(r.status)}
                       </Text>
                     </View>
@@ -219,10 +285,20 @@ export default function Reservas() {
                   {r.status === "CONFIRMED" && r.confirmation_code ? (
                     <View style={{ marginTop: 10 }}>
                       <Text style={{ color: "#111827", fontWeight: "900" }}>
-                        PIN: <Text style={{ color: "#fb923c" }}>{r.confirmation_code}</Text>
+                        PIN:{" "}
+                        <Text style={{ color: "#fb923c" }}>
+                          {r.confirmation_code}
+                        </Text>
                       </Text>
-                      <Text style={{ color: "#6b7280", marginTop: 4, fontSize: 12 }}>
-                        Informe este PIN ao barraqueiro para confirmar sua chegada.
+                      <Text
+                        style={{
+                          color: "#6b7280",
+                          marginTop: 4,
+                          fontSize: 12,
+                        }}
+                      >
+                        Informe este PIN ao barraqueiro para confirmar sua
+                        chegada.
                       </Text>
                     </View>
                   ) : null}
