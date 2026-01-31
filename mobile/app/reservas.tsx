@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, Pressable, ActivityIndicator, ScrollView, RefreshControl } from "react-native";
 import { supabase } from "../lib/supabase";
 
@@ -17,10 +17,6 @@ export default function Reservas() {
   const [refreshing, setRefreshing] = useState(false);
   const [items, setItems] = useState<Reservation[]>([]);
 
-  const cutoffIso = useMemo(() => {
-    return new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString();
-  }, []);
-
   async function load() {
     setLoading(true);
 
@@ -32,6 +28,8 @@ export default function Reservas() {
       setLoading(false);
       return;
     }
+
+    const cutoffIso = new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString();
 
     const q = supabase
       .from("reservations")
