@@ -15,7 +15,7 @@ type Reservation = {
   arrival_time: string | null;
   created_at: string;
   confirmation_code?: string | null;
-  vendors?: { name: string | null } | null; // join
+  vendors?: { name: string | null }[] | null; // join
 };
 
 type TabKey = "atuais" | "antigas";
@@ -180,7 +180,7 @@ export default function Reservas() {
           <View style={{ gap: 10 }}>
             {items.map((r) => {
               const c = statusColors(r.status);
-              const vendorName = r.vendors?.name ?? "--";
+              const vendorName = r.vendors?.[0]?.name ?? "--";
 
               return (
                 <View
