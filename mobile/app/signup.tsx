@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Image,
 } from "react-native";
 import { supabase } from "../lib/supabase";
 import { router } from "expo-router";
@@ -80,6 +81,16 @@ export default function Signup() {
         contentContainerStyle={{ flexGrow: 1, padding: 24, justifyContent: "center" }}
         keyboardShouldPersistTaps="handled"
       >
+        <Image
+          source={require("../assets/images/logo.png")}
+          style={{
+            width: 200,
+            height: 200,
+            alignSelf: "center",
+            marginBottom: 24,
+          }}
+          resizeMode="contain"
+        />
         <Text style={{ fontSize: 24, fontWeight: "900", marginBottom: 16 }}>
           Criar conta
         </Text>

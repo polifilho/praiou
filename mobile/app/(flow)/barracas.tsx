@@ -83,9 +83,9 @@ export default function Barracas() {
           ) : null}
 
           <Text style={{ fontSize: 16, fontWeight: "600" }}>{v.name}</Text>
-          <Text style={{ color: "#6b7280" }}>
+          {/* <Text style={{ color: "#6b7280" }}>
             ⭐ {Number(v.rating_avg ?? 0).toFixed(1)}
-          </Text>
+          </Text> */}
         </Pressable>
       ))}
     </View>

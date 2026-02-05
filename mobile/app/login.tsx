@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Image
 } from "react-native";
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
@@ -98,6 +99,16 @@ export default function Login() {
         contentContainerStyle={{ flexGrow: 1, padding: 24, justifyContent: "center" }}
         keyboardShouldPersistTaps="handled"
       >
+        <Image
+          source={require("../assets/images/logo.png")}
+          style={{
+            width: 200,
+            height: 200,
+            alignSelf: "center",
+            marginBottom: 24,
+          }}
+          resizeMode="contain"
+        />
         <Text style={{ fontSize: 24, fontWeight: "900", marginBottom: 16 }}>
           Login
         </Text>
@@ -166,9 +177,14 @@ export default function Login() {
           </Pressable>
 
           {/* opcional (futuro) */}
-          <Text style={{ textAlign: "center", color: "#9ca3af", marginTop: 6, fontSize: 12 }}>
+          {/* <Text style={{ textAlign: "center", color: "#9ca3af", marginTop: 6, fontSize: 12 }}>
             Esqueceu a senha? Vamos adicionar essa opção em seguida.
-          </Text>
+          </Text> */}
+          <Pressable onPress={() => router.push("/forgot-password")} style={{ marginTop: 12 }}>
+            <Text style={{ color: "#fb923c", textAlign: "center", fontWeight: "800" }}>
+              Esqueci minha senha
+            </Text>
+          </Pressable>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
