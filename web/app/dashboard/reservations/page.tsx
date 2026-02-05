@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getMyVendorId } from "@/lib/vendor";
+import { useRouter } from "next/navigation";
 
 type ReservationStatus = "PENDING" | "CONFIRMED" | "ARRIVED" | "NO_SHOW" | "CANCELED";
 
@@ -52,6 +53,7 @@ export default function ReservationsPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const router = useRouter();
 
   // --------------------------
   // Load
@@ -180,10 +182,11 @@ export default function ReservationsPage() {
   // Realtime
   // --------------------------
   useEffect(() => {
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-    let active = true;
+  let channel: ReturnType<typeof supabase.channel> | null = null;
+  let active = true;
 
-    (async () => {
+  (async () => {
+    try {
       const vid = await getMyVendorId();
       if (!active) return;
 
@@ -205,14 +208,26 @@ export default function ReservationsPage() {
           }
         )
         .subscribe();
-    })();
+    } catch (e: any) {
+      const msg = e?.message ?? "Erro";
 
-    return () => {
-      active = false;
-      if (channel) supabase.removeChannel(channel);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+      if (msg === "SEM_SESSAO") {
+        router.replace("/login"); // ✅ manda pro login do painel
+        return;
+      }
+
+      setErr(msg);
+      setLoading(false);
+    }
+  })();
+
+  return () => {
+    active = false;
+    if (channel) supabase.removeChannel(channel);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
 
   const pendingCount = useMemo(
     () => rows.filter((r) => r.status === "PENDING").length,
