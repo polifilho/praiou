@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -56,6 +56,10 @@ export default function Reservas() {
   const [items, setItems] = useState<Reservation[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
+  // ✅ Realtime
+  const [userId, setUserId] = useState<string | null>(null);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
   async function load() {
     setLoading(true);
     setErr(null);
@@ -75,6 +79,9 @@ export default function Reservas() {
       setLoading(false);
       return;
     }
+
+    // ✅ salva userId para o realtime
+    setUserId(user.id);
 
     const cutoffIso = new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString();
 
@@ -103,7 +110,7 @@ export default function Reservas() {
       new Set(reservations.map((r) => r.vendor_id).filter(Boolean))
     ) as string[];
 
-    let vendorMap = new Map<string, string>();
+    const vendorMap = new Map<string, string>();
 
     if (vendorIds.length > 0) {
       const { data: vData, error: vErr } = await supabase
@@ -121,7 +128,7 @@ export default function Reservas() {
       }
     }
 
-    const merged = reservations.map((r) => ({
+    const merged: Reservation[] = reservations.map((r) => ({
       ...r,
       vendor_name: r.vendor_id ? vendorMap.get(r.vendor_id) ?? null : null,
     }));
@@ -136,10 +143,49 @@ export default function Reservas() {
     setRefreshing(false);
   }
 
+  // ✅ load ao trocar aba
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
+
+  // ✅ Realtime: assina quando tiver userId
+  useEffect(() => {
+    if (!userId) return;
+
+    // limpa canal anterior (evita duplicar)
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+
+    const channel = supabase
+      .channel(`customer-reservations-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "reservations",
+          filter: `user_id=eq.${userId}`,
+        },
+        async () => {
+          // MVP robusto: recarrega
+          await load();
+        }
+      )
+      .subscribe();
+
+    channelRef.current = channel;
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   if (loading) {
     return (

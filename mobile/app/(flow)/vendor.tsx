@@ -135,7 +135,7 @@ export default function VendorScreen() {
     return d;
   }
 
-  const OPEN_LIMIT = { h: 18, m: 0 }; // fecha 18:00
+  const OPEN_LIMIT = { h: 22, m: 0 }; // fecha 18:00
 
   function clampToRules(selected: Date) {
     const now = new Date();
@@ -173,6 +173,9 @@ export default function VendorScreen() {
   }
 
   async function reservar() {
+    // ✅ trava duplo clique
+    if (submitting) return;
+
     const hasAny = Object.values(qty).some((v) => v > 0);
     if (!hasAny) {
       Alert.alert("Atenção", "Selecione pelo menos 1 item.");
@@ -184,17 +187,14 @@ export default function VendorScreen() {
       return;
     }
 
-    // ✅ valida regras de horário (passado / após 18h)
     const check = clampToRules(arrivalTime);
     if (!check.ok) {
       Alert.alert("Horário inválido", check.reason);
       return;
     }
 
-    // ✅ AQUI entra o arrivalIso
     const arrivalIso = check.value.toISOString();
 
-    // monta items para RPC
     const itemsPayload = Object.entries(qty)
       .filter(([, q]) => q > 0)
       .map(([itemId, q]) => ({
@@ -202,12 +202,14 @@ export default function VendorScreen() {
         qty: q,
       }));
 
+    setSubmitting(true);
+
     try {
       const { data: reservationId, error } = await supabase.rpc(
         "create_reservation_with_stock",
         {
           p_vendor_id: vendor!.id,
-          p_arrival_time: arrivalIso,   // ✅ USADO AQUI
+          p_arrival_time: arrivalIso,
           p_note: note?.trim() || null,
           p_items: itemsPayload,
         }
@@ -218,24 +220,20 @@ export default function VendorScreen() {
         return;
       }
 
-      Alert.alert(
-        "Reserva enviada!",
-        "Reserva encaminhada com sucesso. Acompanhe o status em Reservas.",
-        [
-          {
-            text: "OK",
-            onPress: () => router.replace("/reservas"),
-          },
-        ]
-      );
-
-      // limpa estado
+      // ✅ opcional: limpar estado antes de sair
       setQty({});
       setArrivalTime(null);
       setNote("");
 
+      Alert.alert(
+        "Reserva enviada!",
+        "Reserva encaminhada com sucesso. Acompanhe o status em Reservas.",
+        [{ text: "OK", onPress: () => router.replace("/reservas") }]
+      );
     } catch (e: any) {
       Alert.alert("Erro", e?.message ?? "Falha ao criar reserva.");
+    } finally {
+      setSubmitting(false);
     }
   }
 

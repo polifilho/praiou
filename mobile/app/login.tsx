@@ -7,11 +7,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Image
 } from "react-native";
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { router } from "expo-router";
+import { Image } from "expo-image";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -99,16 +99,14 @@ export default function Login() {
         contentContainerStyle={{ flexGrow: 1, padding: 24, justifyContent: "center" }}
         keyboardShouldPersistTaps="handled"
       >
-        <Image
-          source={require("../assets/images/logo.png")}
-          style={{
-            width: 200,
-            height: 200,
-            alignSelf: "center",
-            marginBottom: 24,
-          }}
-          resizeMode="contain"
-        />
+        <View style={{ width: 200, height: 200, alignSelf: "center", marginBottom: 24 }}>
+          <Image
+            source={require("../assets/images/logo.png")}
+            style={{ width: "100%", height: "100%" }}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+          />
+        </View>
         <Text style={{ fontSize: 24, fontWeight: "900", marginBottom: 16 }}>
           Login
         </Text>

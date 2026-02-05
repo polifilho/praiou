@@ -14,6 +14,9 @@ type Vendor = {
   name: string;
   photo_url: string | null;
   rating_avg: number | null;
+  address: string | null;
+  reference_point: string | null;
+  responsible_name: string | null;
 };
 
 export default function Barracas() {
@@ -21,6 +24,8 @@ export default function Barracas() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+
+  const safe = (v?: string | null) => (v && v.trim() ? v : "--");
 
   useEffect(() => {
     load();
@@ -32,7 +37,7 @@ export default function Barracas() {
 
     const { data, error } = await supabase
       .from("vendors")
-      .select("id,name,photo_url,rating_avg")
+      .select("id,name,photo_url,rating_avg,address,reference_point,responsible_name")
       .eq("beach_id", String(beachId))
       .eq("is_active", true)
       .order("rating_avg", { ascending: false });
@@ -57,7 +62,7 @@ export default function Barracas() {
         </Text>
       ) : null}
 
-      {vendors.map((v) => (
+      {vendors.map((v: Vendor) => (
         <Pressable
           key={v.id}
           onPress={() =>
@@ -82,8 +87,13 @@ export default function Barracas() {
             />
           ) : null}
 
-          <Text style={{ fontSize: 16, fontWeight: "600" }}>{v.name}</Text>
-          {/* <Text style={{ color: "#6b7280" }}>
+          <Text style={{ fontSize: 20, fontWeight: "600" }}>{v.name}</Text>
+          <View style={{ marginTop: 12, backgroundColor: "white" }}>
+            <Text><Text style={{ fontWeight: "700" }}>Responsável:</Text> {safe(v.responsible_name)}</Text>
+            <Text><Text style={{ fontWeight: "700" }}>Endereço:</Text> {safe(v.address)}</Text>
+            <Text><Text style={{ fontWeight: "700" }}>Referência:</Text> {safe(v.reference_point)}</Text>
+          </View>
+          {/* <Text style={{ color: "#6b7280", marginTop: 8 }}>
             ⭐ {Number(v.rating_avg ?? 0).toFixed(1)}
           </Text> */}
         </Pressable>

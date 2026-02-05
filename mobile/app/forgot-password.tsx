@@ -12,6 +12,7 @@ import {
 import { supabase } from "../lib/supabase";
 import { router } from "expo-router";
 import * as Linking from "expo-linking";
+import { Image } from "expo-image";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -54,6 +55,14 @@ export default function ForgotPassword() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScrollView contentContainerStyle={{ flexGrow: 1, padding: 24, justifyContent: "center" }}>
+        <View style={{ width: 200, height: 200, alignSelf: "center", marginBottom: 24 }}>
+          <Image
+            source={require("../assets/images/logo.png")}
+            style={{ width: "100%", height: "100%" }}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+          />
+        </View>
         <Text style={{ fontSize: 22, fontWeight: "900", marginBottom: 10 }}>
           Esqueci minha senha
         </Text>
