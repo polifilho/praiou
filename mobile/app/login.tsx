@@ -2,7 +2,6 @@ import {
   View,
   Text,
   TextInput,
-  Alert,
   Pressable,
   KeyboardAvoidingView,
   Platform,
@@ -12,11 +11,13 @@ import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { router } from "expo-router";
 import { Image } from "expo-image";
+import { useAppModal } from "../components/AppModal";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const modal = useAppModal();
 
   function friendlyAuthError(message: string) {
     const m = message.toLowerCase();
@@ -34,7 +35,7 @@ export default function Login() {
 
   async function login() {
     if (!email.trim() || !password) {
-      Alert.alert("Erro", "Informe email e senha.");
+      modal.info("Erro", "Informe email e senha.", "Ok");
       return;
     }
 
@@ -48,7 +49,7 @@ export default function Login() {
     // ✅ primeiro trata erro do login
     if (error) {
       setLoading(false);
-      Alert.alert("Erro", friendlyAuthError(error.message));
+      modal.info("Error de autenticação", friendlyAuthError(error.message), "Ok");
       return;
     }
 
@@ -58,7 +59,7 @@ export default function Login() {
 
     if (userErr || !user) {
       setLoading(false);
-      Alert.alert("Erro", "Não foi possível validar o usuário.");
+      modal.info("Error de validação", "Não foi possível validar o usuário.", "Ok");
       return;
     }
 
@@ -72,7 +73,7 @@ export default function Login() {
     if (profErr) {
       await supabase.auth.signOut();
       setLoading(false);
-      Alert.alert("Erro", profErr.message);
+      modal.info("Erro", profErr.message, "Ok");
       return;
     }
 
@@ -81,7 +82,7 @@ export default function Login() {
     if (role !== "customer") {
       await supabase.auth.signOut();
       setLoading(false);
-      Alert.alert("Acesso negado", "Este aplicativo é exclusivo para clientes.");
+      modal.info("Acesso negado", "Este aplicativo é exclusivo para clientes.", "Ok");
       router.replace("/login");
       return;
     }

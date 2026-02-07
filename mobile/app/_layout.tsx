@@ -1,6 +1,5 @@
 import { Drawer } from "expo-router/drawer";
 import {
-  Alert,
   Pressable,
   Text,
   View,
@@ -9,10 +8,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
-import { Redirect, usePathname, router } from "expo-router";
+import { usePathname, router } from "expo-router";
 import type { DrawerNavigationOptions } from "@react-navigation/drawer";
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { AppModalProvider, useAppModal } from "../components/AppModal";
 
 function DrawerMenuItem({
   label,
@@ -38,9 +38,24 @@ function DrawerMenuItem({
 }
 
 function CustomDrawerContent(props: any) {
+  const modal = useAppModal();
+
   async function handleLogout() {
-    props.navigation?.closeDrawer?.();
-    await supabase.auth.signOut(); // guard vai mandar pro login
+    try {
+      // fecha o drawer antes (evita estados estranhos)
+      props.navigation?.closeDrawer?.();
+
+      // ✅ MAIS ROBUSTO:
+      // "local" limpa o token do aparelho mesmo se a API reclamar de refresh token inválido
+      const { error } = await supabase.auth.signOut({ scope: "local" });
+
+      if (error) {
+        console.log("signOut error:", error.message);
+      }
+    } finally {
+      // ✅ força ir pro login (independente do guard)
+      router.replace("/login");
+    }
   }
 
   function closeDrawer() {
@@ -117,10 +132,14 @@ function CustomDrawerContent(props: any) {
         >
           <Pressable
             onPress={() =>
-              Alert.alert("Sair", "Deseja sair da sua conta?", [
-                { text: "Cancelar", style: "cancel" },
-                { text: "Sair", style: "destructive", onPress: handleLogout },
-              ])
+              modal.confirm({
+                title: "Sair",
+                message: "Deseja sair da sua conta?",
+                confirmText: "Sair",
+                cancelText: "Cancelar",
+                variant: "#fb923c",
+                onConfirm: handleLogout,
+              })
             }
             style={{
               backgroundColor: "#fb923c",
@@ -141,15 +160,12 @@ function CustomDrawerContent(props: any) {
 
 export default function RootLayout() {
   const pathname = usePathname();
-
   const [booting, setBooting] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
 
-  // ✅ Boot robusto (não trava em loading)
   useEffect(() => {
     let mounted = true;
 
-    // fallback: nunca ficar travado no loading
     const t = setTimeout(() => {
       if (mounted) setBooting(false);
     }, 4000);
@@ -185,6 +201,17 @@ export default function RootLayout() {
     };
   }, []);
 
+  const isAuthRoute =
+    pathname === "/login" ||
+    pathname === "/signup" ||
+    pathname === "/forgot-password";
+
+  useEffect(() => {
+    if (!booting && !session && !isAuthRoute) {
+      router.replace("/login");
+    }
+  }, [booting, session, isAuthRoute]);
+
   if (booting) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
@@ -193,71 +220,63 @@ export default function RootLayout() {
     );
   }
 
-  // ✅ Rotas liberadas sem sessão (somente auth)
-  const isAuthRoute =
-    pathname === "/login" ||
-    pathname === "/signup" ||
-    pathname === "/forgot-password";
-
-  if (!session && !isAuthRoute) {
-    return <Redirect href="/login" />;
-  }
-
   return (
-    <Drawer
-      drawerContent={(props) => <CustomDrawerContent {...props} />}
-      screenOptions={({ route }): DrawerNavigationOptions => ({
-        headerStyle: { backgroundColor: "#fb923c" },
-        headerTintColor: "#fff",
-        headerShown: !route.name.startsWith("(flow)/"),
-        swipeEnabled: !(
-          route.name === "login" ||
-          route.name === "signup" ||
-          route.name === "forgot-password"
-        ),
-      })}
-      initialRouteName="index"
-    >
-      {/* Menu */}
-      <Drawer.Screen name="index" options={{ title: "Início" }} />
-      <Drawer.Screen name="reservas" options={{ title: "Reservas" }} />
-      <Drawer.Screen name="perfil" options={{ title: "Perfil" }} />
+    <AppModalProvider>
+      <Drawer
+        drawerContent={(props) => <CustomDrawerContent {...props} />}
+        screenOptions={({ route }): DrawerNavigationOptions => ({
+          headerStyle: { backgroundColor: "#fb923c" },
+          headerTintColor: "#fff",
+          headerShown: !route.name.startsWith("(flow)/"),
+          swipeEnabled: !(
+            route.name === "login" ||
+            route.name === "signup" ||
+            route.name === "forgot-password"
+          ),
+        })}
+        initialRouteName="index"
+      >
+        {/* Menu */}
+        <Drawer.Screen name="index" options={{ title: "Início" }} />
+        <Drawer.Screen name="reservas" options={{ title: "Reservas" }} />
+        <Drawer.Screen name="perfil" options={{ title: "Perfil" }} />
 
-      {/* Escondidos (auth) */}
-      <Drawer.Screen
-        name="login"
-        options={{
-          drawerItemStyle: { display: "none" },
-          headerShown: false,
-          swipeEnabled: false,
-        }}
-      />
-      <Drawer.Screen
-        name="signup"
-        options={{
-          drawerItemStyle: { display: "none" },
-          headerShown: false,
-          swipeEnabled: false,
-        }}
-      />
-      <Drawer.Screen
-        name="forgot-password"
-        options={{
-          drawerItemStyle: { display: "none" },
-          headerShown: false,
-          swipeEnabled: false,
-        }}
-      />
+        {/* Escondidos (auth) */}
+        <Drawer.Screen
+          name="login"
+          options={{
+            drawerItemStyle: { display: "none" },
+            headerShown: false,
+            swipeEnabled: false,
+          }}
+        />
+        <Drawer.Screen
+          name="signup"
+          options={{
+            drawerItemStyle: { display: "none" },
+            headerShown: false,
+            swipeEnabled: false,
+          }}
+        />
+        <Drawer.Screen
+          name="forgot-password"
+          options={{
+            drawerItemStyle: { display: "none" },
+            headerShown: false,
+            swipeEnabled: false,
+          }}
+        />
 
-      {/* Flow escondido */}
-      <Drawer.Screen
-        name="(flow)"
-        options={{
-          drawerItemStyle: { display: "none" },
-          headerShown: false,
-          title: "",
-        }}
-      />
-    </Drawer>
+        {/* Flow escondido */}
+        <Drawer.Screen
+          name="(flow)"
+          options={{
+            drawerItemStyle: { display: "none" },
+            headerShown: false,
+            title: "",
+          }}
+        />
+      </Drawer>
+    </AppModalProvider>
   );
 }

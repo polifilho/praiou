@@ -4,7 +4,6 @@ import {
   Text,
   TextInput,
   Pressable,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -13,15 +12,17 @@ import { supabase } from "../lib/supabase";
 import { router } from "expo-router";
 import * as Linking from "expo-linking";
 import { Image } from "expo-image";
+import { useAppModal } from "../components/AppModal";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
+  const modal = useAppModal();
 
   async function send() {
     const e = email.trim().toLowerCase();
     if (!e) {
-      Alert.alert("Atenção", "Digite seu email.");
+      modal.info("Atenção", "Digite seu email.", "Ok");
       return;
     }
 
@@ -36,15 +37,17 @@ export default function ForgotPassword() {
     setSending(false);
 
     if (error) {
-      Alert.alert("Erro", error.message);
+      modal.info("Erro", error.message, "Ok");
       return;
     }
 
-    Alert.alert(
-      "Email enviado",
-      "Se esse email estiver cadastrado, você receberá um link para redefinir sua senha.",
-      [{ text: "OK", onPress: () => router.replace("/login") }]
-    );
+    modal.confirm({
+      title: "Email enviado!",
+      message: "Se esse email estiver cadastrado, você receberá um link para redefinir sua senha.",
+      confirmText: "Ok",
+      variant: "#fb923c",
+      onConfirm: () => router.replace("/login"),
+    })
 
     setEmail("");
   }

@@ -6,7 +6,6 @@ import {
   ActivityIndicator,
   Pressable,
   TextInput,
-  Alert,
   ScrollView,
   Platform,
   KeyboardAvoidingView
@@ -14,7 +13,7 @@ import {
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, router } from "expo-router";
 import { supabase } from "../../lib/supabase";
-
+import { useAppModal } from "../../components/AppModal";
 
 type Vendor = {
   id: string;
@@ -41,6 +40,7 @@ export default function VendorScreen() {
   const [items, setItems] = useState<VendorItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const modal = useAppModal();
 
   const [qty, setQty] = useState<Record<string, number>>({});
   const [note, setNote] = useState("");
@@ -65,7 +65,7 @@ export default function VendorScreen() {
       .limit(1);
 
     if (vErr) {
-      Alert.alert("Erro", vErr.message);
+      modal.info("Erro", vErr.message, "Ok");
       setLoading(false);
       return;
     }
@@ -81,7 +81,7 @@ export default function VendorScreen() {
       .order("name", { ascending: true });
 
     if (iErr) {
-      Alert.alert("Erro", iErr.message);
+      modal.info("Erro", iErr.message, "Ok");
       setLoading(false);
       return;
     }
@@ -166,7 +166,7 @@ export default function VendorScreen() {
   function handleTimeSelected(selected: Date) {
     const res = clampToRules(selected);
     if (!res.ok) {
-      Alert.alert("Horário inválido", res.reason);
+      modal.info("Horário inválido", res.reason, "Ok");
       return;
     }
     setArrivalTime(res.value);
@@ -178,18 +178,18 @@ export default function VendorScreen() {
 
     const hasAny = Object.values(qty).some((v) => v > 0);
     if (!hasAny) {
-      Alert.alert("Atenção", "Selecione pelo menos 1 item.");
+      modal.info("Atenção",  "Selecione pelo menos 1 item.", "Ok");
       return;
     }
 
     if (!arrivalTime) {
-      Alert.alert("Atenção", "Selecione o horário de chegada.");
+      modal.info("Atenção",  "Selecione o horário de chegada.", "Ok");
       return;
     }
 
     const check = clampToRules(arrivalTime);
     if (!check.ok) {
-      Alert.alert("Horário inválido", check.reason);
+      modal.info("Horário inválido",  check.reason, "Ok");
       return;
     }
 
@@ -216,7 +216,7 @@ export default function VendorScreen() {
       );
 
       if (error) {
-        Alert.alert("Erro", error.message);
+        modal.info("Erro",  error.message, "Ok");
         return;
       }
 
@@ -225,13 +225,15 @@ export default function VendorScreen() {
       setArrivalTime(null);
       setNote("");
 
-      Alert.alert(
-        "Reserva enviada!",
-        "Reserva encaminhada com sucesso. Acompanhe o status em Reservas.",
-        [{ text: "OK", onPress: () => router.replace("/reservas") }]
-      );
+      modal.confirm({
+        title: "Reserva enviada!",
+        message: "Reserva encaminhada com sucesso. Acompanhe o status em Reservas.",
+        confirmText: "Ok",
+        variant: "#fb923c",
+        onConfirm: () => router.replace("/reservas"),
+      })
     } catch (e: any) {
-      Alert.alert("Erro", e?.message ?? "Falha ao criar reserva.");
+      modal.info("Erro",  e?.message ?? "Falha ao criar reserva.", "Ok");
     } finally {
       setSubmitting(false);
     }

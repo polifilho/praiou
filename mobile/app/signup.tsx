@@ -4,7 +4,6 @@ import {
   Text,
   TextInput,
   Pressable,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -12,25 +11,27 @@ import {
 import { supabase } from "../lib/supabase";
 import { router } from "expo-router";
 import { Image } from "expo-image";
+import { useAppModal } from "../components/AppModal";
 
 export default function Signup() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const modal = useAppModal();
 
   const [loading, setLoading] = useState(false);
 
   async function signUp() {
     if (!fullName.trim()) {
-      Alert.alert("Erro", "Informe seu nome completo.");
+      modal.info("Error", "Informe seu nome completo.", "Ok");
       return;
     }
     if (!email.trim()) {
-      Alert.alert("Erro", "Informe seu email.");
+      modal.info("Error no email", "Informe seu email.", "Ok");
       return;
     }
     if (password.length < 6) {
-      Alert.alert("Erro", "A senha deve ter pelo menos 6 caracteres.");
+      modal.info("Error na senha", "A senha deve ter pelo menos 6 caracteres.", "Ok");
       return;
     }
 
@@ -50,7 +51,7 @@ export default function Signup() {
     setLoading(false);
 
     if (error) {
-      Alert.alert("Erro", error.message);
+      modal.info("Error", error.message, "Ok");
       return;
     }
 
@@ -60,16 +61,13 @@ export default function Signup() {
     setPassword("");
 
     // ✅ feedback de confirmação de email
-    Alert.alert(
-      "Conta criada!",
-      "Enviamos um email de confirmação. Confirme sua conta para conseguir entrar.",
-      [
-        {
-          text: "OK",
-          onPress: () => router.replace("/login"),
-        },
-      ]
-    );
+    modal.confirm({
+      title: "Conta criada!",
+      message: "Enviamos um email de confirmação. Confirme sua conta para conseguir entrar.",
+      confirmText: "Ok",
+      variant: "#fb923c",
+      onConfirm: () => router.replace("/login"),
+    })
   }
 
   return (
