@@ -6,9 +6,10 @@ import {
   ActivityIndicator,
   Pressable,
   TextInput,
+  Alert,
   ScrollView,
   Platform,
-  KeyboardAvoidingView
+  KeyboardAvoidingView,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, router } from "expo-router";
@@ -34,25 +35,112 @@ type VendorItem = {
   is_active: boolean;
 };
 
+const OPEN_H = 7;
+const CLOSE_H = 17; // ✅ limite 17:00
+
+function startOfDay(d: Date) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+function isSameDay(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+function addDays(d: Date, days: number) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + days);
+  return x;
+}
+function todayAt(h: number, m: number) {
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d;
+}
+function atDayTime(day: Date, h: number, m: number) {
+  const d = new Date(day);
+  d.setHours(h, m, 0, 0);
+  return d;
+}
+
+function formatDateBR(d: Date | null) {
+  if (!d) return "--";
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+function formatTime(d: Date | null) {
+  if (!d) return "--";
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+// ✅ valida: hoje/amanhã, janela 07:00–17:00, e (se hoje) >= agora+10min
+function clampToRules(selectedDay: Date, selectedTime: Date) {
+  const now = new Date();
+
+  const day0 = startOfDay(now);
+  const day1 = startOfDay(addDays(now, 1));
+
+  const pickedDay = startOfDay(selectedDay);
+
+  // dia precisa ser hoje ou amanhã
+  if (!(isSameDay(pickedDay, day0) || isSameDay(pickedDay, day1))) {
+    return { ok: false as const, reason: "Você só pode reservar para hoje ou amanhã." };
+  }
+
+  // monta datetime final
+  const chosen = new Date(pickedDay);
+  chosen.setHours(selectedTime.getHours(), selectedTime.getMinutes(), 0, 0);
+
+  // janela 07:00–17:00 (17:00 permitido)
+  const open = atDayTime(pickedDay, OPEN_H, 0);
+  const close = atDayTime(pickedDay, CLOSE_H, 0);
+
+  if (chosen < open) {
+    return { ok: false as const, reason: "Reservas só a partir de 07:00." };
+  }
+  if (chosen > close) {
+    return { ok: false as const, reason: "Reservas só até 17:00." };
+  }
+
+  // se for hoje, mínimo agora + 10min
+  if (isSameDay(pickedDay, day0)) {
+    const min = new Date(now.getTime() + 10 * 60 * 1000);
+    if (chosen < min) {
+      return { ok: false as const, reason: "Para hoje, selecione pelo menos 10 min à frente." };
+    }
+  }
+
+  return { ok: true as const, value: chosen };
+}
+
 export default function VendorScreen() {
   const { vendorId } = useLocalSearchParams();
   const [vendor, setVendor] = useState<Vendor | null>(null);
   const [items, setItems] = useState<VendorItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const modal = useAppModal();
+
+  // ✅ trava duplo clique
+  const [submitting, setSubmitting] = useState(false);
 
   const [qty, setQty] = useState<Record<string, number>>({});
   const [note, setNote] = useState("");
 
-  // TimePicker
-  const [arrivalTime, setArrivalTime] = useState<Date | null>(null);
-  const [showPicker, setShowPicker] = useState(false);
+  // ✅ Agora temos dia + hora
+  const [arrivalDay, setArrivalDay] = useState<Date>(() => new Date()); // hoje default
+  const [arrivalTime, setArrivalTime] = useState<Date>(() => new Date()); // hora default
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
   const safe = (v?: string | null) => (v && v.trim() ? v : "--");
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vendorId]);
 
   async function load() {
@@ -109,87 +197,20 @@ export default function VendorScreen() {
     setQty((prev) => ({ ...prev, [id]: Math.max(0, (prev[id] ?? 0) - 1) }));
   }
 
-  function formatTime(d: Date | null) {
-    if (!d) return "--";
-    const hh = String(d.getHours()).padStart(2, "0");
-    const mm = String(d.getMinutes()).padStart(2, "0");
-    return `${hh}:${mm}`;
-  }
-
-  function buildArrivalISO(selected: Date) {
-    const now = new Date();
-    const d = new Date(now);
-    d.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
-
-    // se o horário escolhido já passou hoje, joga para amanhã (MVP)
-    if (d.getTime() < now.getTime() - 60 * 1000) {
-      d.setDate(d.getDate() + 1);
-    }
-
-    return d.toISOString();
-  }
-
-  function todayAt(h: number, m: number) {
-    const d = new Date();
-    d.setHours(h, m, 0, 0);
-    return d;
-  }
-
-  const OPEN_LIMIT = { h: 22, m: 0 }; // fecha 18:00
-
-  function clampToRules(selected: Date) {
-    const now = new Date();
-    const close = todayAt(OPEN_LIMIT.h, OPEN_LIMIT.m);
-
-    // se já passou do horário limite, nem deixa reservar hoje
-    if (now >= close) {
-      return { ok: false as const, reason: "Reservas encerradas hoje (após 18:00)." };
-    }
-
-    // cria um Date "hoje" com a hora/minuto escolhidos
-    const chosen = new Date();
-    chosen.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
-
-    // não permitir passado
-    if (chosen < now) {
-      return { ok: false as const, reason: "Escolha um horário no futuro (não pode no passado)." };
-    }
-
-    // não permitir depois das 18:00
-    if (chosen > close) {
-      return { ok: false as const, reason: "Reservas só até 18:00." };
-    }
-
-    return { ok: true as const, value: chosen };
-  }
-
-  function handleTimeSelected(selected: Date) {
-    const res = clampToRules(selected);
-    if (!res.ok) {
-      modal.info("Horário inválido", res.reason, "Ok");
-      return;
-    }
-    setArrivalTime(res.value);
-  }
-
   async function reservar() {
-    // ✅ trava duplo clique
+    // ✅ impede duplo clique na mesma render
     if (submitting) return;
 
     const hasAny = Object.values(qty).some((v) => v > 0);
     if (!hasAny) {
-      modal.info("Atenção",  "Selecione pelo menos 1 item.", "Ok");
+      modal.info("Atenção", "Selecione pelo menos 1 item.", "Ok");
       return;
     }
 
-    if (!arrivalTime) {
-      modal.info("Atenção",  "Selecione o horário de chegada.", "Ok");
-      return;
-    }
-
-    const check = clampToRules(arrivalTime);
+    // valida regras dia/hora
+    const check = clampToRules(arrivalDay, arrivalTime);
     if (!check.ok) {
-      modal.info("Horário inválido",  check.reason, "Ok");
+      modal.info("Horário inválido", check.reason, "Ok");
       return;
     }
 
@@ -197,33 +218,21 @@ export default function VendorScreen() {
 
     const itemsPayload = Object.entries(qty)
       .filter(([, q]) => q > 0)
-      .map(([itemId, q]) => ({
-        item_id: itemId,
-        qty: q,
-      }));
+      .map(([itemId, q]) => ({ item_id: itemId, qty: q }));
 
     setSubmitting(true);
-
     try {
-      const { data: reservationId, error } = await supabase.rpc(
-        "create_reservation_with_stock",
-        {
-          p_vendor_id: vendor!.id,
-          p_arrival_time: arrivalIso,
-          p_note: note?.trim() || null,
-          p_items: itemsPayload,
-        }
-      );
+      const { error } = await supabase.rpc("create_reservation_with_stock", {
+        p_vendor_id: vendor!.id,
+        p_arrival_time: arrivalIso,
+        p_note: note?.trim() || null,
+        p_items: itemsPayload,
+      });
 
       if (error) {
-        modal.info("Erro",  error.message, "Ok");
+        modal.info("Erro", error.message, "Ok");
         return;
       }
-
-      // ✅ opcional: limpar estado antes de sair
-      setQty({});
-      setArrivalTime(null);
-      setNote("");
 
       modal.confirm({
         title: "Reserva enviada!",
@@ -232,8 +241,12 @@ export default function VendorScreen() {
         variant: "#fb923c",
         onConfirm: () => router.replace("/reservas"),
       })
+
+      setQty({});
+      setNote("");
+      // mantém dia/hora
     } catch (e: any) {
-      modal.info("Erro",  e?.message ?? "Falha ao criar reserva.", "Ok");
+      modal.info("Erro", e?.message ?? "Falha ao criar reserva.", "Ok");
     } finally {
       setSubmitting(false);
     }
@@ -255,11 +268,17 @@ export default function VendorScreen() {
     );
   }
 
+  // label do resumo
+  const preview = clampToRules(arrivalDay, arrivalTime);
+  const previewText = preview.ok
+    ? `${formatDateBR(arrivalDay)} às ${formatTime(arrivalTime)}`
+    : `${formatDateBR(arrivalDay)} às ${formatTime(arrivalTime)}`;
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0} // ajuste fino se precisar
+      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
     >
       <ScrollView
         style={{ flex: 1 }}
@@ -346,10 +365,10 @@ export default function VendorScreen() {
         <View style={{ marginTop: 12, backgroundColor: "white", borderRadius: 16, padding: 14, borderWidth: 1, borderColor: "#e5e7eb" }}>
           <Text style={{ fontWeight: "800", marginBottom: 8 }}>Reserva</Text>
 
-          <Text style={{ fontWeight: "700", marginBottom: 6 }}>Horário aproximado de chegada</Text>
+          <Text style={{ fontWeight: "700", marginBottom: 6 }}>Dia e horário de chegada</Text>
 
-          <Pressable
-            onPress={() => setShowPicker(true)}
+          {/* RESUMO */}
+          <View
             style={{
               borderWidth: 1,
               borderColor: "#e5e7eb",
@@ -359,41 +378,80 @@ export default function VendorScreen() {
               backgroundColor: "white",
             }}
           >
-            <Text style={{ fontWeight: "800" }}>{arrivalTime ? formatTime(arrivalTime) : "Selecionar horário"}</Text>
+            <Text style={{ fontWeight: "900" }}>{previewText}</Text>
             <Text style={{ color: "#6b7280", marginTop: 2, fontSize: 12 }}>
-              Você tem 20 min de tolerância a partir desse horário.
+              Horário permitido: 07:00–17:00. Para hoje: mínimo 10 min à frente.
             </Text>
-          </Pressable>
+            {!preview.ok ? (
+              <Text style={{ color: "#b91c1c", marginTop: 6, fontSize: 12, fontWeight: "800" }}>
+                {preview.reason}
+              </Text>
+            ) : null}
+          </View>
 
-          {showPicker ? (
-            <View
+          {/* BOTÕES: selecionar data e hora */}
+          <View style={{ flexDirection: "row", gap: 10, marginBottom: 12 }}>
+            <Pressable
+              onPress={() => setShowDatePicker(true)}
               style={{
-                backgroundColor: "white",
-                borderRadius: 12,
-                paddingVertical: 10,
-                paddingHorizontal: 8,
+                flex: 1,
                 borderWidth: 1,
                 borderColor: "#e5e7eb",
-                marginBottom: 12,
+                borderRadius: 12,
+                padding: 12,
+                backgroundColor: "white",
               }}
             >
+              <Text style={{ fontWeight: "800" }}>Dia: {formatDateBR(arrivalDay)}</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setShowTimePicker(true)}
+              style={{
+                flex: 1,
+                borderWidth: 1,
+                borderColor: "#e5e7eb",
+                borderRadius: 12,
+                padding: 12,
+                backgroundColor: "white",
+              }}
+            >
+              <Text style={{ fontWeight: "800" }}>Hora: {formatTime(arrivalTime)}</Text>
+            </Pressable>
+          </View>
+
+          {showDatePicker ? (
+            <DateTimePicker
+              value={arrivalDay}
+              mode="date"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={(_, selected) => {
+                if (Platform.OS !== "ios") setShowDatePicker(false);
+                if (selected) setArrivalDay(selected);
+              }}
+            />
+          ) : null}
+
+          {showTimePicker ? (
+            <View style={{ marginBottom: 12 }}>
               <DateTimePicker
-                value={arrivalTime ?? new Date()}
+                value={arrivalTime}
                 mode="time"
                 is24Hour
                 display={Platform.OS === "ios" ? "spinner" : "default"}
-                themeVariant="light"              // ✅ força tema claro
-                textColor="#111827"               // ✅ iOS: garante texto escuro
+                themeVariant="light"
+                // @ts-ignore (iOS only)
+                textColor="#111827"
                 onChange={(_, selected) => {
-                  if (Platform.OS !== "ios") setShowPicker(false);
-                  if (selected) handleTimeSelected(selected);
+                  if (Platform.OS !== "ios") setShowTimePicker(false);
+                  if (selected) setArrivalTime(selected);
                 }}
-                style={Platform.OS === "ios" ? { height: 160 } : undefined} // ✅ dá altura no iOS
+                style={Platform.OS === "ios" ? { height: 160 } : undefined}
               />
 
               {Platform.OS === "ios" ? (
                 <Pressable
-                  onPress={() => setShowPicker(false)}
+                  onPress={() => setShowTimePicker(false)}
                   style={{
                     marginTop: 8,
                     backgroundColor: "#fb923c",

@@ -22,6 +22,21 @@ type UserProfile = {
   role: string | null;
 };
 
+function maskPhone(value: string) {
+  // remove tudo que não é número
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+
+  if (digits.length <= 2) {
+    return `(${digits}`;
+  }
+
+  if (digits.length <= 6) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  }
+
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+}
+
 export default function Perfil() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -294,7 +309,7 @@ export default function Perfil() {
             <TextInput
               placeholder="Ex: (21) 99999-9999"
               value={phone}
-              onChangeText={setPhone}
+              onChangeText={(text) => setPhone(maskPhone(text))}
               keyboardType="phone-pad"
               placeholderTextColor="#9ca3af"
               style={{

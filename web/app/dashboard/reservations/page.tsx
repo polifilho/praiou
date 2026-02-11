@@ -111,10 +111,12 @@ export default function ReservationsPage() {
     setBusyId(reservationId);
 
     // ✅ rejeitar = cancel + restock
-    const { error } = await supabase.rpc("cancel_reservation_and_restock", {
-      p_reservation_id: reservationId,
-      p_new_status: "CANCELED",
-    });
+    const { error } = await supabase.rpc("reject_reservation_by_vendor", { p_reservation_id: reservationId });
+    // await supabase.rpc("cancel_reservation_and_restock", {
+    //   p_reservation_id: reservationId,
+    //   p_new_status: "CANCELED",
+    // });
+    
 
     setBusyId(null);
 

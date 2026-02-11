@@ -14,7 +14,8 @@
         "backgroundColor": "#FFF7ED"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.pedropolisenso.orlaplus"
     },
     "ios": {
       "supportsTablet": false,

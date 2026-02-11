@@ -13,6 +13,8 @@ import type { DrawerNavigationOptions } from "@react-navigation/drawer";
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { AppModalProvider, useAppModal } from "../components/AppModal";
+import { registerForPushNotificationsAsync } from "../lib/push";
+
 
 function DrawerMenuItem({
   label,
@@ -166,6 +168,13 @@ export default function RootLayout() {
   useEffect(() => {
     let mounted = true;
 
+    if (session?.user) {
+      registerForPushNotificationsAsync().then((sucesso: any) => {
+        console.log("Push register sucesso:", sucesso)
+      }).catch((e) =>
+        console.log("Push register error:", e?.message ?? e)
+      );
+    }
     const t = setTimeout(() => {
       if (mounted) setBooting(false);
     }, 4000);
@@ -199,7 +208,7 @@ export default function RootLayout() {
       clearTimeout(t);
       sub.subscription.unsubscribe();
     };
-  }, []);
+  }, [session?.user?.id]);
 
   const isAuthRoute =
     pathname === "/login" ||
