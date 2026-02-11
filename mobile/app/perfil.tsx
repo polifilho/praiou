@@ -13,6 +13,7 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../lib/supabase";
 import { useAppModal } from "../components/AppModal";
+import { router } from "expo-router";
 
 type UserProfile = {
   id: string;
@@ -148,7 +149,9 @@ export default function Perfil() {
 
     setChangingPass(true);
 
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
 
     setChangingPass(false);
 
@@ -159,7 +162,18 @@ export default function Perfil() {
 
     setNewPassword("");
     setConfirmPassword("");
-    modal.info("Sucesso", "Senha atualizada.", "Ok");
+
+    // ✅ IMPORTANTE: mostra sucesso e desloga
+    modal.confirm({
+      title: "Senha atualizada",
+      message: "Por segurança, faça login novamente com sua nova senha.",
+      confirmText: "Ok",
+      variant: "#fb923c",
+      onConfirm: async () => {
+        await supabase.auth.signOut({ scope: "local" });
+        router.replace("/login");
+      },
+    });
   }
 
   async function pickAndUploadAvatar() {

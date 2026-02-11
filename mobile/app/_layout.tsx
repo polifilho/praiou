@@ -1,11 +1,5 @@
 import { Drawer } from "expo-router/drawer";
-import {
-  Pressable,
-  Text,
-  View,
-  ActivityIndicator,
-  Image,
-} from "react-native";
+import { Pressable, Text, View, ActivityIndicator, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 import { usePathname, router } from "expo-router";
@@ -14,7 +8,10 @@ import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { AppModalProvider, useAppModal } from "../components/AppModal";
 import { registerForPushNotificationsAsync } from "../lib/push";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
+const LOGIN_TIME_KEY = "login_time";
+const SESSION_MAX_MS = 24 * 60 * 60 * 1000; // 24h
 
 function DrawerMenuItem({
   label,
@@ -44,18 +41,12 @@ function CustomDrawerContent(props: any) {
 
   async function handleLogout() {
     try {
-      // fecha o drawer antes (evita estados estranhos)
       props.navigation?.closeDrawer?.();
 
-      // ✅ MAIS ROBUSTO:
-      // "local" limpa o token do aparelho mesmo se a API reclamar de refresh token inválido
       const { error } = await supabase.auth.signOut({ scope: "local" });
-
-      if (error) {
-        console.log("signOut error:", error.message);
-      }
+      if (error) console.log("signOut error:", error.message);
     } finally {
-      // ✅ força ir pro login (independente do guard)
+      await AsyncStorage.removeItem(LOGIN_TIME_KEY);
       router.replace("/login");
     }
   }
@@ -168,13 +159,15 @@ export default function RootLayout() {
   useEffect(() => {
     let mounted = true;
 
+    // push register (mantive sua lógica)
     if (session?.user) {
-      registerForPushNotificationsAsync().then((sucesso: any) => {
-        console.log("Push register sucesso:", sucesso)
-      }).catch((e) =>
-        console.log("Push register error:", e?.message ?? e)
-      );
+      registerForPushNotificationsAsync()
+        .then((sucesso: any) => {
+          console.log("Push register sucesso:", sucesso);
+        })
+        .catch((e) => console.log("Push register error:", e?.message ?? e));
     }
+
     const t = setTimeout(() => {
       if (mounted) setBooting(false);
     }, 4000);
@@ -187,9 +180,36 @@ export default function RootLayout() {
         if (error) {
           console.log("getSession error:", error.message);
           setSession(null);
-        } else {
-          setSession(data.session ?? null);
+          await AsyncStorage.removeItem(LOGIN_TIME_KEY);
+          return;
         }
+
+        const sess = data.session ?? null;
+
+        // ✅ se existe sessão, checa se passou de 24h desde o "login_time"
+        if (sess) {
+          const loginTimeRaw = await AsyncStorage.getItem(LOGIN_TIME_KEY);
+
+          // se não tiver login_time ainda, salva agora (primeiro boot após login)
+          if (!loginTimeRaw) {
+            await AsyncStorage.setItem(LOGIN_TIME_KEY, Date.now().toString());
+            setSession(sess);
+            return;
+          }
+
+          const diff = Date.now() - Number(loginTimeRaw);
+          if (diff > SESSION_MAX_MS) {
+            await supabase.auth.signOut({ scope: "local" });
+            await AsyncStorage.removeItem(LOGIN_TIME_KEY);
+            setSession(null);
+            router.replace("/login");
+            return;
+          }
+        } else {
+          await AsyncStorage.removeItem(LOGIN_TIME_KEY);
+        }
+
+        setSession(sess);
       } catch (e: any) {
         console.log("getSession crash:", e?.message ?? e);
         if (mounted) setSession(null);
@@ -199,9 +219,18 @@ export default function RootLayout() {
       }
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-    });
+    const { data: sub } = supabase.auth.onAuthStateChange(
+      async (_event, newSession) => {
+        setSession(newSession);
+
+        // ✅ grava horário quando logar / remove quando sair
+        if (newSession) {
+          await AsyncStorage.setItem(LOGIN_TIME_KEY, Date.now().toString());
+        } else {
+          await AsyncStorage.removeItem(LOGIN_TIME_KEY);
+        }
+      }
+    );
 
     return () => {
       mounted = false;
@@ -289,3 +318,295 @@ export default function RootLayout() {
     </AppModalProvider>
   );
 }
+
+// import { Drawer } from "expo-router/drawer";
+// import {
+//   Pressable,
+//   Text,
+//   View,
+//   ActivityIndicator,
+//   Image,
+// } from "react-native";
+// import { SafeAreaView } from "react-native-safe-area-context";
+// import { supabase } from "../lib/supabase";
+// import { usePathname, router } from "expo-router";
+// import type { DrawerNavigationOptions } from "@react-navigation/drawer";
+// import { useEffect, useState } from "react";
+// import type { Session } from "@supabase/supabase-js";
+// import { AppModalProvider, useAppModal } from "../components/AppModal";
+// import { registerForPushNotificationsAsync } from "../lib/push";
+
+
+// function DrawerMenuItem({
+//   label,
+//   onPress,
+// }: {
+//   label: string;
+//   onPress: () => void;
+// }) {
+//   return (
+//     <Pressable
+//       onPress={onPress}
+//       style={{
+//         paddingVertical: 14,
+//         paddingHorizontal: 16,
+//         borderRadius: 12,
+//       }}
+//     >
+//       <Text style={{ fontSize: 16, fontWeight: "700", color: "#111827" }}>
+//         {label}
+//       </Text>
+//     </Pressable>
+//   );
+// }
+
+// function CustomDrawerContent(props: any) {
+//   const modal = useAppModal();
+
+//   async function handleLogout() {
+//     try {
+//       // fecha o drawer antes (evita estados estranhos)
+//       props.navigation?.closeDrawer?.();
+
+//       // ✅ MAIS ROBUSTO:
+//       // "local" limpa o token do aparelho mesmo se a API reclamar de refresh token inválido
+//       const { error } = await supabase.auth.signOut({ scope: "local" });
+
+//       if (error) {
+//         console.log("signOut error:", error.message);
+//       }
+//     } finally {
+//       // ✅ força ir pro login (independente do guard)
+//       router.replace("/login");
+//     }
+//   }
+
+//   function closeDrawer() {
+//     props.navigation?.closeDrawer?.();
+//   }
+
+//   return (
+//     <SafeAreaView style={{ flex: 1 }}>
+//       <View style={{ flex: 1, paddingTop: 20 }}>
+//         {/* Topo do menu */}
+//         <View
+//           style={{
+//             flexDirection: "row",
+//             alignItems: "center",
+//             paddingHorizontal: 16,
+//             paddingBottom: 5,
+//           }}
+//         >
+//           <Image
+//             source={require("../assets/images/logo.png")}
+//             style={{
+//               width: 36,
+//               height: 36,
+//               marginRight: 10,
+//               marginLeft: 10,
+//             }}
+//             resizeMode="contain"
+//           />
+
+//           <View>
+//             <Text style={{ fontSize: 18, fontWeight: "800", color: "#111827" }}>
+//               Bem-vindo(a) ao Orla+
+//             </Text>
+//             <Text style={{ color: "#6b7280", marginTop: 2 }}>
+//               A praia do seu jeito!
+//             </Text>
+//           </View>
+//         </View>
+
+//         {/* Itens do menu */}
+//         <View style={{ paddingHorizontal: 10, marginTop: 10 }}>
+//           <DrawerMenuItem
+//             label="Início"
+//             onPress={() => {
+//               router.push("/");
+//               closeDrawer();
+//             }}
+//           />
+//           <DrawerMenuItem
+//             label="Reservas"
+//             onPress={() => {
+//               router.push("/reservas");
+//               closeDrawer();
+//             }}
+//           />
+//           <DrawerMenuItem
+//             label="Perfil"
+//             onPress={() => {
+//               router.push("/perfil");
+//               closeDrawer();
+//             }}
+//           />
+//         </View>
+
+//         <View style={{ flex: 1 }} />
+
+//         {/* Rodapé com logout */}
+//         <View
+//           style={{
+//             padding: 16,
+//             borderTopWidth: 1,
+//             borderTopColor: "#e5e7eb",
+//           }}
+//         >
+//           <Pressable
+//             onPress={() =>
+//               modal.confirm({
+//                 title: "Sair",
+//                 message: "Deseja sair da sua conta?",
+//                 confirmText: "Sair",
+//                 cancelText: "Cancelar",
+//                 variant: "#fb923c",
+//                 onConfirm: handleLogout,
+//               })
+//             }
+//             style={{
+//               backgroundColor: "#fb923c",
+//               paddingVertical: 14,
+//               borderRadius: 12,
+//               alignItems: "center",
+//             }}
+//           >
+//             <Text style={{ color: "white", fontSize: 16, fontWeight: "800" }}>
+//               Sair
+//             </Text>
+//           </Pressable>
+//         </View>
+//       </View>
+//     </SafeAreaView>
+//   );
+// }
+
+// export default function RootLayout() {
+//   const pathname = usePathname();
+//   const [booting, setBooting] = useState(true);
+//   const [session, setSession] = useState<Session | null>(null);
+
+//   useEffect(() => {
+//     let mounted = true;
+
+//     if (session?.user) {
+//       registerForPushNotificationsAsync().then((sucesso: any) => {
+//         console.log("Push register sucesso:", sucesso)
+//       }).catch((e) =>
+//         console.log("Push register error:", e?.message ?? e)
+//       );
+//     }
+//     const t = setTimeout(() => {
+//       if (mounted) setBooting(false);
+//     }, 4000);
+
+//     (async () => {
+//       try {
+//         const { data, error } = await supabase.auth.getSession();
+//         if (!mounted) return;
+
+//         if (error) {
+//           console.log("getSession error:", error.message);
+//           setSession(null);
+//         } else {
+//           setSession(data.session ?? null);
+//         }
+//       } catch (e: any) {
+//         console.log("getSession crash:", e?.message ?? e);
+//         if (mounted) setSession(null);
+//       } finally {
+//         if (mounted) setBooting(false);
+//         clearTimeout(t);
+//       }
+//     })();
+
+//     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+//       setSession(newSession);
+//     });
+
+//     return () => {
+//       mounted = false;
+//       clearTimeout(t);
+//       sub.subscription.unsubscribe();
+//     };
+//   }, [session?.user?.id]);
+
+//   const isAuthRoute =
+//     pathname === "/login" ||
+//     pathname === "/signup" ||
+//     pathname === "/forgot-password";
+
+//   useEffect(() => {
+//     if (!booting && !session && !isAuthRoute) {
+//       router.replace("/login");
+//     }
+//   }, [booting, session, isAuthRoute]);
+
+//   if (booting) {
+//     return (
+//       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+//         <ActivityIndicator />
+//       </View>
+//     );
+//   }
+
+//   return (
+//     <AppModalProvider>
+//       <Drawer
+//         drawerContent={(props) => <CustomDrawerContent {...props} />}
+//         screenOptions={({ route }): DrawerNavigationOptions => ({
+//           headerStyle: { backgroundColor: "#fb923c" },
+//           headerTintColor: "#fff",
+//           headerShown: !route.name.startsWith("(flow)/"),
+//           swipeEnabled: !(
+//             route.name === "login" ||
+//             route.name === "signup" ||
+//             route.name === "forgot-password"
+//           ),
+//         })}
+//         initialRouteName="index"
+//       >
+//         {/* Menu */}
+//         <Drawer.Screen name="index" options={{ title: "Início" }} />
+//         <Drawer.Screen name="reservas" options={{ title: "Reservas" }} />
+//         <Drawer.Screen name="perfil" options={{ title: "Perfil" }} />
+
+//         {/* Escondidos (auth) */}
+//         <Drawer.Screen
+//           name="login"
+//           options={{
+//             drawerItemStyle: { display: "none" },
+//             headerShown: false,
+//             swipeEnabled: false,
+//           }}
+//         />
+//         <Drawer.Screen
+//           name="signup"
+//           options={{
+//             drawerItemStyle: { display: "none" },
+//             headerShown: false,
+//             swipeEnabled: false,
+//           }}
+//         />
+//         <Drawer.Screen
+//           name="forgot-password"
+//           options={{
+//             drawerItemStyle: { display: "none" },
+//             headerShown: false,
+//             swipeEnabled: false,
+//           }}
+//         />
+
+//         {/* Flow escondido */}
+//         <Drawer.Screen
+//           name="(flow)"
+//           options={{
+//             drawerItemStyle: { display: "none" },
+//             headerShown: false,
+//             title: "",
+//           }}
+//         />
+//       </Drawer>
+//     </AppModalProvider>
+//   );
+// }
