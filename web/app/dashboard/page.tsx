@@ -193,7 +193,7 @@ export default function DashboardHome() {
                     if (f) onUploadPhoto(f);
                   }}
                 />
-                {uploading ? "Enviando..." : "Enviar/alterar foto"}
+                {uploading ? "Enviando..." : "Alterar foto"}
               </label>
 
               <span className="text-xs text-gray-500">
